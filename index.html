@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>EnzoDing-rgb</title>
+    <meta name="description" content="EnzoDing-rgb 的个人主页（GitHub Pages）" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg" aria-hidden="true"></div>
+    <main class="container">
+      <header class="header">
+        <div class="badge">GitHub Pages</div>
+        <h1 class="title">EnzoDing-rgb</h1>
+        <p class="subtitle">欢迎来到我的主页。这里会放作品、笔记与链接。</p>
+      </header>
+
+      <section class="grid">
+        <a class="card" href="https://github.com/EnzoDing-rgb" target="_blank" rel="noreferrer">
+          <div class="card-title">GitHub</div>
+          <div class="card-desc">查看我的仓库与项目。</div>
+          <div class="card-meta">github.com/EnzoDing-rgb</div>
+        </a>
+
+        <a class="card" href="https://github.com/EnzoDing-rgb/EnzoDing-rgb.github.io" target="_blank" rel="noreferrer">
+          <div class="card-title">本站源码</div>
+          <div class="card-desc">这个站点的代码就在这个仓库里。</div>
+          <div class="card-meta">EnzoDing-rgb.github.io</div>
+        </a>
+
+        <a class="card" href="#" id="copy-link">
+          <div class="card-title">复制站点链接</div>
+          <div class="card-desc">一键复制当前站点 URL。</div>
+          <div class="card-meta" id="site-url">加载中…</div>
+        </a>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title">下一步你可以做什么？</h2>
+        <ul class="list">
+          <li>把作品放到这里：新增一个 <code>projects/</code> 页面或卡片链接。</li>
+          <li>绑定自定义域名：添加 <code>CNAME</code> 文件并在 GitHub Pages 设置里配置。</li>
+          <li>加博客：后续可以迁移到 Astro / Next.js / Hugo 等静态站点框架。</li>
+        </ul>
+      </section>
+
+      <footer class="footer">
+        <span>© <span id="year"></span> EnzoDing-rgb</span>
+        <span class="dot" aria-hidden="true">•</span>
+        <span class="muted">Built with HTML + CSS</span>
+      </footer>
+    </main>
+
+    <script>
+      const yearEl = document.getElementById("year");
+      if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+      const urlEl = document.getElementById("site-url");
+      const link = window.location.origin + window.location.pathname.replace(/\/index\.html$/, "/");
+      if (urlEl) urlEl.textContent = link;
+
+      const copy = document.getElementById("copy-link");
+      copy?.addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          await navigator.clipboard.writeText(link);
+          urlEl && (urlEl.textContent = "已复制：" + link);
+          setTimeout(() => urlEl && (urlEl.textContent = link), 1200);
+        } catch {
+          urlEl && (urlEl.textContent = "复制失败，请手动复制：" + link);
+        }
+      });
+    </script>
+  </body>
+</html>

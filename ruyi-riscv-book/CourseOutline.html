@@ -511,7 +511,7 @@
   </div>
 
   <h2>章节总览</h2>
-  <p class="note">每章一行：目标、实验、成果。阶段实验与综合项目单独列出。</p>
+  <p class="note">每章一行：目标、实验、成果。实验归属对应章节（ch03=实验1, ch05=实验2）。综合项目单独列出。</p>
   <div class="table-wrap">
     <table class="summary">
       <thead>
@@ -549,14 +549,6 @@
           <td>Blink/按键；UART Echo；DHT22 读取；PWM 驱动风扇/LED</td>
           <td>可复用的外设驱动与串口调试框架</td>
         </tr>
-        <tr class="mod-lab">
-          <td>实验 1</td>
-          <td>阶段实验</td>
-          <td>温度传感器 + 风扇</td>
-          <td>完成第一个本地嵌入式控制闭环</td>
-          <td>读温度 → 与阈值比较 → 控制风扇；串口打印状态</td>
-          <td>可演示的温控风扇程序（C）</td>
-        </tr>
         <tr class="mod-linux">
           <td>ch04</td>
           <td>Linux 应用篇</td>
@@ -572,14 +564,6 @@
           <td>理解物联网消息模型，实现订阅与发布</td>
           <td>连接 Broker；订阅控制主题；解析 payload 驱动 GPIO</td>
           <td>可复用的 MQTT 客户端模块（C）</td>
-        </tr>
-        <tr class="mod-lab">
-          <td>实验 2</td>
-          <td>阶段实验</td>
-          <td>MQTT 远程控灯</td>
-          <td>完成「手机 → 网络 → 板子 → LED」远程闭环</td>
-          <td>Mosquitto + 手机 App 发 <code>on</code>/<code>off</code>；板端订阅并控灯</td>
-          <td>可演示的远程控灯（C + MQTT）</td>
         </tr>
         <tr class="mod-linux">
           <td>ch06</td>

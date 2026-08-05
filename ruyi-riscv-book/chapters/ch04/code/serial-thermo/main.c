@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <gpiod.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,10 @@
 #define DHT_RETRY        3
 #define LINE_MAX         128
 
+/* 湿度控制：湿度过高（哈气、湿气重）也开风扇；回落后才允许关 */
+#define H_ON             90.0f
+#define H_OFF            72.0f
+
 /* 1 = 假温度演示；接真 DHT22 用 -DSIMULATE_SENSOR=0 覆盖 */
 #ifndef SIMULATE_SENSOR
 #define SIMULATE_SENSOR  1
@@ -47,8 +52,8 @@ struct thermo_state {
 };
 
 static struct thermo_state g_st = {
-	.t_high = 28.0f,
-	.t_low = 26.0f,
+	.t_high = 31.0f,  /* 高于室温：捂热过 31 开风扇 */
+	.t_low = 29.5f,   /* 凉回 29.5 以下（且湿度回落）关风扇 */
 	.fan_on = 0,
 	.has_sample = 0,
 };
@@ -56,6 +61,14 @@ static struct thermo_state g_st = {
 static struct gpiod_chip *chip;
 static struct gpiod_line_request *fan_req;
 static int cmd_fd = -1;
+static volatile sig_atomic_t g_running = 1;
+
+/* Ctrl+C / kill：只翻旗标，主循环自己收尾（先关风扇再释放 GPIO） */
+static void on_signal(int sig)
+{
+	(void)sig;
+	g_running = 0;
+}
 
 /* libgpiod v2：申请一根线。direction 为 OUTPUT 时立即置 val。 */
 static struct gpiod_line_request *line_request(unsigned int offset,
@@ -225,6 +238,11 @@ static int dht22_read(float *temp_c, float *hum_pct)
 	*temp_c = ((data[2] << 8) | data[3]) / 10.0f;
 	if (data[2] & 0x80)
 		*temp_c = -(((data[2] & 0x7F) << 8) | data[3]) / 10.0f;
+	/* 合理性过滤：校验和过了但数值离谱（对齐偶发错位）的直接丢弃 */
+	if (*hum_pct < 0.0f || *hum_pct > 100.0f)
+		return -1;
+	if (*temp_c < -40.0f || *temp_c > 80.0f)
+		return -1;
 	return 0;
 
 fail:
@@ -270,42 +288,71 @@ static void sample_and_control(void)
 	g_st.last_temp = t;
 	g_st.last_hum = h;
 	g_st.has_sample = 1;
-	printf("[INFO] temp=%.1fC hum=%.1f%% fan=%s thr=%.1f/%.1f\n",
-	       t, h, g_st.fan_on ? "ON" : "OFF", g_st.t_high, g_st.t_low);
+	printf("[INFO] temp=%.1fC hum=%.1f%% fan=%s thr=%.1f/%.1f H=%.0f/%.0f\n",
+	       t, h, g_st.fan_on ? "ON" : "OFF",
+	       g_st.t_high, g_st.t_low, H_ON, H_OFF);
 	fflush(stdout);
 
-	if (t > g_st.t_high && !g_st.fan_on)
+	/* 开：温度过高，或湿度过高（哈气/湿气重），都开风扇 */
+	if ((t > g_st.t_high || h > H_ON) && !g_st.fan_on)
 		fan_set(1);
-	else if (t < g_st.t_low && g_st.fan_on)
+	/* 关：温度回落 且 湿度回落，才关风扇 */
+	else if (t < g_st.t_low && h < H_OFF && g_st.fan_on)
 		fan_set(0);
 }
 
 /* ========== 学生 TODO：命令处理 ========== */
 
-/*
- * TODO: 打印 g_st 中的温度、湿度、风扇、阈值。
- * 无有效采样时也要说明「尚无采样」。
- */
+/* 打印当前状态：温度、湿度、风扇、阈值；尚无采样时说明清楚 */
 static int cmd_status(char *args)
 {
 	(void)args;
-	/* TODO: 实现 status */
-	printf("[TODO] cmd_status not implemented\n");
+	if (!g_st.has_sample) {
+		printf("[INFO] no sample yet — waiting for DHT22\n");
+		fflush(stdout);
+		return 0;
+	}
+	printf("[INFO] temp=%.1fC hum=%.1f%% fan=%s thr=%.1f/%.1f H=%.0f/%.0f\n",
+	       g_st.last_temp, g_st.last_hum,
+	       g_st.fan_on ? "ON" : "OFF",
+	       g_st.t_high, g_st.t_low, H_ON, H_OFF);
 	fflush(stdout);
-	return -1;
+	return 0;
 }
 
-/*
- * TODO: 解析 "high <数>" 或 "low <数>"，写入 g_st。
- * 要求 low < high；失败打印 [ERR] 并返回非 0。
- */
+/* 解析 "high <数>" 或 "low <数>"，写入 g_st；要求 low < high */
 static int cmd_set(char *args)
 {
-	(void)args;
-	/* TODO: 实现 set high / set low */
-	printf("[TODO] cmd_set not implemented\n");
+	char what[16];
+	float v;
+
+	if (sscanf(args, "%15s %f", what, &v) != 2) {
+		printf("[ERR] usage: set high <N> | set low <N>\n");
+		fflush(stdout);
+		return -1;
+	}
+	if (strcmp(what, "high") == 0) {
+		if (v <= g_st.t_low) {
+			printf("[ERR] high must be > low (%.1f)\n", g_st.t_low);
+			fflush(stdout);
+			return -1;
+		}
+		g_st.t_high = v;
+	} else if (strcmp(what, "low") == 0) {
+		if (v >= g_st.t_high) {
+			printf("[ERR] low must be < high (%.1f)\n", g_st.t_high);
+			fflush(stdout);
+			return -1;
+		}
+		g_st.t_low = v;
+	} else {
+		printf("[ERR] unknown: set %s\n", what);
+		fflush(stdout);
+		return -1;
+	}
+	printf("[INFO] threshold -> high=%.1f low=%.1f\n", g_st.t_high, g_st.t_low);
 	fflush(stdout);
-	return -1;
+	return 0;
 }
 
 struct cmd_entry {
@@ -313,13 +360,10 @@ struct cmd_entry {
 	int (*handler)(char *args);
 };
 
-/*
- * TODO: 把 status / set 挂进表（末尾用 {NULL,NULL} 结束）。
- */
 static const struct cmd_entry g_cmds[] = {
-	/* TODO: { "status", cmd_status }, */
-	/* TODO: { "set",    cmd_set }, */
-	{ NULL, NULL },
+	{ "status", cmd_status },
+	{ "set",    cmd_set    },
+	{ NULL,     NULL       },
 };
 
 /* 按名字查找并调用；未知命令返回 -1 */
@@ -375,23 +419,45 @@ static int read_command_line(void)
 	return 0;
 }
 
-/*
- * TODO: 用 select 同时等 cmd_fd 可读 与 采样超时。
- * 超时 → sample_and_control()；可读 → read_command_line()。
- * 提示：处理命令后应扣减剩余等待时间，避免采样越来越稀。
- */
+/* 用 select 同时等命令可读与采样超时：
+ * 超时 → 采样控温；命令可读 → 处理一行。
+ * deadline 用墙上时钟算「距下次采样还剩多少」，处理命令后不重置，
+ * 采样节奏就不会被打字拖慢。 */
 static void main_loop(void)
 {
-	/* 占位：阻塞式「先采样再睡」，两边不能同时工作。
-	 * 请改成 select 版本（见讲义 4.3 与深入理解）。 */
-	log_info("TODO: replace this loop with select()");
-	for (;;) {
-		sample_and_control();
-		/* TODO: 不要只用 sleep；改为 select + 剩余超时 */
-		usleep((useconds_t)SAMPLE_MS * 1000);
-		/* TODO: 在 select 可读分支里调用 read_command_line() */
-		(void)cmd_fd;
-		(void)read_command_line; /* 防未使用告警；实现后删除此行 */
+	double deadline = 0.0;
+	struct timespec ts;
+	int cmd_open = 1;   /* stdin 读到 EOF 后不再等命令，专心采样 */
+
+	while (g_running) {
+		fd_set rfds;
+		struct timeval tv;
+		int n;
+
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		double now_s = ts.tv_sec + ts.tv_nsec / 1e9;
+		if (deadline <= now_s)
+			deadline = now_s + SAMPLE_MS / 1000.0;
+		double remain = deadline - now_s;
+		tv.tv_sec = (long)remain;
+		tv.tv_usec = (long)((remain - tv.tv_sec) * 1e6);
+
+		FD_ZERO(&rfds);
+		if (cmd_open)
+			FD_SET(cmd_fd, &rfds);
+		n = select(cmd_fd + 1, &rfds, NULL, NULL, &tv);
+		if (n < 0) {
+			if (errno == EINTR)
+				break;               /* Ctrl+C 打断了 select */
+			perror("select");
+			break;
+		}
+		if (n == 0) {
+			sample_and_control();           /* 超时：该采样了 */
+		} else if (cmd_open && FD_ISSET(cmd_fd, &rfds)) {
+			if (read_command_line() < 0)
+				cmd_open = 0;               /* EOF：输入结束 */
+		}
 	}
 }
 
@@ -426,13 +492,19 @@ int main(void)
 	printf("[INFO] T_HIGH=%.1f T_LOW=%.1f sample=%d ms\n",
 	       g_st.t_high, g_st.t_low, SAMPLE_MS);
 
+	signal(SIGINT, on_signal);
+	signal(SIGTERM, on_signal);
+
 	main_loop();
 
+	/* 优雅收尾：先把继电器拉低（模块输入悬浮会自己飘高），再释放 */
+	fan_set(0);
 	if (fan_req)
 		gpiod_line_request_release(fan_req);
 	gpiod_chip_close(chip);
 #if !USE_STDIO
 	close(cmd_fd);
 #endif
+	printf("[INFO] cleaned up, fan off\n");
 	return 0;
 }

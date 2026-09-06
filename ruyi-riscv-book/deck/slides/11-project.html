@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>综合项目</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+  .slide { padding-bottom: 36px; }
+  h1 { font-size: 48px; margin-bottom: 8px; }
+  .lead { font-size: 22px; margin-bottom: 22px; max-width: 1600px; }
+
+  .stage {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1.45fr 0.9fr;
+    gap: 34px;
+    align-items: stretch;
+  }
+
+  /* 终端 · 主角 */
+  .term-panel {
+    background: #1e1c18;
+    border: 1px solid #3a362f;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 30px;
+    min-height: 0;
+    box-shadow: 0 18px 44px rgba(30,28,24,0.35);
+  }
+  .term-title {
+    font-size: 14px; letter-spacing: 0.1em; color: #6b6557;
+    font-family: var(--mono); margin-bottom: 16px;
+  }
+  .term-body {
+    flex: 1;
+    display: flex; flex-direction: column; justify-content: center;
+    font-family: var(--mono); font-size: 32px; line-height: 1.75; color: #e8e2d4;
+  }
+  .term-body .prompt { color: #7eb8b4; }
+  .term-body .ask { color: #c4bba8; }
+  .term-body .call { color: #a8d8a0; }
+  .cursor {
+    display: inline-block; width: 15px; height: 32px;
+    background: #7eb8b4; margin-left: 6px; vertical-align: -4px;
+  }
+  .term-foot {
+    margin-top: 16px;
+    font-size: 18px;
+    color: var(--faint);
+    font-family: var(--mono);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .term-foot .arrow { color: var(--warm); }
+
+  /* 板上真的动 */
+  .payoff {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-top: 6px solid var(--warm);
+    display: flex; flex-direction: column;
+    padding: 22px 26px; min-height: 0;
+  }
+  .payoff h2 { font-size: 24px; margin: 0 0 14px; color: var(--text); }
+  .effect { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+  .effect .row {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--paper); border: 1px solid var(--line-light);
+    padding: 13px 18px; font-size: 20px; color: var(--text);
+  }
+  .effect .row .em { font-size: 28px; }
+  .effect .row code { font-size: 16px; }
+  .effect .row .res { margin-left: auto; color: var(--muted); font-size: 19px; }
+  .payoff .note { font-size: 16px; color: var(--faint); margin-top: 12px; line-height: 1.5; }
+
+  /* 底部细条 */
+  .strip {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr 1fr;
+    gap: 14px;
+  }
+  .strip .cell {
+    background: #fff; border: 1px solid var(--line);
+    padding: 14px 20px; font-size: 18px; color: var(--muted); line-height: 1.5;
+  }
+  .strip .cell strong { display: block; color: var(--text); font-size: 19px; margin-bottom: 4px; }
+  .strip .cell code { font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <p class="kicker"><span class="ke">🤖</span> 综合项目 · 端侧 Agent 环境终端</p>
+  <h1>你打字，AI 选工具，板上的手真的动</h1>
+  <p class="lead">六章合成一台能对话的机器：一句话发出去，AI 决定调哪个工具，工具经 MQTT 转发，荔枝派的三线程真的去动——风扇、灯、读数都发生在板子上。没人打字时，控温也在照常跑。</p>
+
+  <div class="stage">
+    <div class="term-panel">
+      <div class="term-title">dsh --profile tui · 终端</div>
+      <div class="term-body">
+        <div><span class="prompt">$</span> dsh --profile tui</div>
+        <div class="ask">&gt; 现在热不热？太吵就关风扇</div>
+        <div class="call">→ set_fan("off")<span class="cursor"></span></div>
+      </div>
+      <div class="term-foot">
+        <span>AI 选工具</span>
+        <span class="arrow">→</span>
+        <span>工具转发 MQTT</span>
+        <span class="arrow">→</span>
+        <span>板上执行</span>
+      </div>
+    </div>
+
+    <div class="payoff">
+      <h2>板上真的动</h2>
+      <div class="effect">
+        <div class="row"><span class="em">🌀</span>风扇<span class="res">→ 停转</span></div>
+        <div class="row"><span class="em">💡</span>LED<span class="res">→ 灭（第五章的灯）</span></div>
+        <div class="row"><span class="em">🌡</span>读数<span class="res"><code>status</code> → 25.3°C · 62%</span></div>
+      </div>
+      <p class="note">工具只转发到 MQTT 主题，不碰针脚；动作由荔枝派 ch06 三线程完成。</p>
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="cell"><strong>工具转发 MQTT</strong><code>read_status</code> · <code>set_fan</code> · <code>set_led</code> · <code>set_threshold</code></div>
+    <div class="cell"><strong>模型可换</strong>本地 K3（llama-server · Q4 GGUF）或云端 DeepSeek，同一套接口只改地址</div>
+    <div class="cell"><strong>没人打字也在跑</strong>滞回控制线程自己拉风扇；总线一直报状态</div>
+  </div>
+</div>
+</body>
+</html>

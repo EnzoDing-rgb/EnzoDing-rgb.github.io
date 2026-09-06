@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>封面</title>
+<link rel="stylesheet" href="../theme.css">
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: 1.02fr 0.98fr;
+    gap: 40px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+  .copy { display: flex; flex-direction: column; justify-content: center; }
+  .meta { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; font-size: 20px; color: var(--faint); }
+  .photos {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .photos .main {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    background: #1a1a18;
+  }
+  .photos .main img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+  }
+  .photos .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    height: 168px;
+    flex-shrink: 0;
+  }
+  .photos .thumb {
+    border: 1px solid var(--line);
+    overflow: hidden;
+    background: #fff;
+  }
+  .photos .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .brand span { font-size: 20px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="hero">
+    <div class="copy">
+      <div class="brand">
+        <img class="logo" src="../assets/ruyi-logo.svg" alt="RuyiSDK">
+        <span>RuyiSDK · 荔枝派 4A · C</span>
+      </div>
+      <p class="kicker"><span class="ke">🌡</span> RISC-V Linux 嵌入式实践课</p>
+      <h1>在真板上，用 C<br>把温控一路做完</h1>
+      <p class="lead">从交叉编译起步，一路做到风扇跟着温度转、敲命令能改阈值。六章一条线，终点是一台跑在板上的 AI 终端。</p>
+      <div class="meta">
+        <span>六章讲义 + 每章实验 · 综合项目：跑在板上的 AI 终端</span>
+        <a class="home-link" href="https://duoqilai.github.io/ruyi-riscv-linux-book/" target="_blank" rel="noopener">duoqilai.github.io/ruyi-riscv-linux-book</a>
+      </div>
+    </div>
+    <div class="photos">
+      <div class="main">
+        <img src="../assets/cover-board.jpg" alt="荔枝派 4A 整板接线">
+      </div>
+      <div class="row">
+        <div class="thumb">
+          <img src="../assets/cover-lichee.jpeg" alt="荔枝派 4A 产品图">
+        </div>
+        <div class="thumb">
+          <img src="../assets/ams1117.png" alt="AMS1117 降压">
+        </div>
+        <div class="thumb">
+          <img src="../assets/cover-fan.png" alt="5V 风扇">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,4 @@
+ruyi-riscv-book/chapters/**/build/
+ruyi-riscv-book/chapters/**/recordings/*/
+ruyi-riscv-book/chapters/**/race-demo/race-demo
+ruyi-riscv-book/chapters/**/tri-thread/tri-thread

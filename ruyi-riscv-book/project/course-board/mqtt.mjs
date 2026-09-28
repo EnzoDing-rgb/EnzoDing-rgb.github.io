@@ -42,7 +42,9 @@ export function mqttExchange({ publishes, subscribe, timeoutMs = 4000 }) {
       if (done) return
       done = true
       clearTimeout(timer)
-      sock.destroy()
+      // 出错直接断；成功走优雅关闭，保证已写入的包发得出去
+      if (err) sock.destroy()
+      else sock.end()
       if (err) reject(err)
       else resolve(value)
     }
@@ -84,6 +86,12 @@ export function mqttExchange({ publishes, subscribe, timeoutMs = 4000 }) {
         buf = buf.subarray(i + rem)
         if (type === 2 && !connack) {
           connack = true
+          // CONNACK 第 2 字节是返回码：0 才算连上，其余一律当失败，别假装成功
+          const code = body.length >= 2 ? body[1] : 255
+          if (code !== 0) {
+            finish(new Error(`mqtt connect refused (CONNACK code ${code})`))
+            return
+          }
           if (subscribe) {
             const sub = Buffer.concat([
               Buffer.from([0, 1]),
@@ -92,11 +100,24 @@ export function mqttExchange({ publishes, subscribe, timeoutMs = 4000 }) {
             ])
             sock.write(packet(0x82, sub))
           }
-          for (const pub of publishes) {
-            const payload = Buffer.from(pub.payload)
-            sock.write(packet(0x30, Buffer.concat([str(pub.topic), payload])))
+          const pubPacket = (pub) =>
+            packet(0x30, Buffer.concat([str(pub.topic), Buffer.from(pub.payload)]))
+          if (!subscribe) {
+            // 只发不收：等最后一包真正写出去再收尾，否则可能被
+            // sock.destroy() 掐掉，命令发不到 broker 却报成功
+            const last = publishes.length - 1
+            if (last < 0) {
+              finish(null, '')
+            } else {
+              publishes.forEach((pub, k) => {
+                if (k === last) sock.write(pubPacket(pub), () => finish(null, ''))
+                else sock.write(pubPacket(pub))
+              })
+            }
+          } else {
+            for (const pub of publishes)
+              sock.write(pubPacket(pub))
           }
-          if (!subscribe) finish(null, '')
         } else if (type === 3) {
           const tlen = body.readUInt16BE(0)
           const payload = body.subarray(2 + tlen).toString()
@@ -116,14 +137,21 @@ export async function readStatus() {
   return line
 }
 
+const FAN_CMD = { on: 'fan on', off: 'fan off', auto: 'fan auto' }
+
 export async function setFan(state) {
-  const cmd = state === 'on' ? 'fan on' : state === 'off' ? 'fan off' : 'fan auto'
+  // 只认 on/off/auto：非法值直接报错，不要悄悄退回 fan auto 解除强制控制
+  if (!Object.hasOwn(FAN_CMD, state))
+    throw new Error(`invalid fan state: ${state} (expected on|off|auto)`)
+  const cmd = FAN_CMD[state]
   await mqttExchange({ publishes: [{ topic: THERMO_CMD, payload: cmd }] })
   return cmd
 }
 
 export async function setLed(state) {
-  const payload = state === 'on' ? 'on' : 'off'
+  if (state !== 'on' && state !== 'off')
+    throw new Error(`invalid led state: ${state} (expected on|off)`)
+  const payload = state
   const line = await mqttExchange({
     publishes: [{ topic: LED_CMD, payload }],
     subscribe: LED_STATUS,
@@ -135,10 +163,53 @@ export async function setLed(state) {
   return line
 }
 
+const THRESHOLD_KEY = { high: true, low: true }
+
+// "temp=30.5 hum=55.0 fan=on mode=force-on high=28.0 low=26.0" → { temp:'30.5', low:'26.0', ... }
+function parseStatusFields(line) {
+  const out = {}
+  for (const tok of String(line || '').trim().split(/\s+/)) {
+    const m = /^([a-z_]+)=(.+)$/.exec(tok)
+    if (m) out[m[1]] = m[2]
+  }
+  return out
+}
+
 export async function setThreshold(which, value) {
-  const cmd = `set ${which} ${value}`
+  const key = String(which ?? '').toLowerCase()
+  if (!Object.hasOwn(THRESHOLD_KEY, key))
+    throw new Error(`invalid threshold: ${which} (expected high|low)`)
+
+  const v = Number(value)
+  if (!Number.isFinite(v))
+    throw new Error(`invalid threshold value: ${value} (expected a number)`)
+  // 板端以 %.1f 回报，比较精度只能是 0.1 °C；过细的值直接拒，别静默取整
+  const want = Math.round(v * 10) / 10
+  if (want !== v)
+    throw new Error(`threshold value out of range: ${v} (use 0.1 °C resolution)`)
+
+  const otherKey = key === 'high' ? 'low' : 'high'
+  const before = parseStatusFields(await readStatus())
+  const other = Number(before[otherKey])
+  if (!Number.isFinite(other))
+    throw new Error(`cannot read current ${otherKey} from board (status: ${JSON.stringify(before)})`)
+
+  // 关系不合法就先拦下：板端会忽略这类命令（不会报错），工具不能假装成功
+  if (key === 'high' && !(want > other))
+    throw new Error(`invalid threshold relation: high=${want} must be > low=${other}`)
+  if (key === 'low' && !(want < other))
+    throw new Error(`invalid threshold relation: low=${want} must be < high=${other}`)
+
+  const cmd = `set ${key} ${want}`
   await mqttExchange({ publishes: [{ topic: THERMO_CMD, payload: cmd }] })
-  return cmd
+
+  // 执行结果确认：读回状态，值没变就是没生效
+  const after = parseStatusFields(await readStatus())
+  const got = Number(after[key])
+  if (got !== want)
+    throw new Error(`threshold not applied: requested ${key}=${want}, board reports ${key}=${after[key]}`)
+
+  return `${cmd} (confirmed ${key}=${want})`
 }
 
 import { pathToFileURL } from 'node:url'

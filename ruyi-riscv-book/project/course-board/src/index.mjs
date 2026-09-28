@@ -30,7 +30,7 @@ export function apply(ctx) {
     name: 'set_fan',
     description: 'Force the fan on or off, or return it to temperature hysteresis. state is on, off, or auto.',
     parameters: {
-      state: { type: 'string', required: true, description: 'on, off, or auto' },
+      state: { type: 'string', required: true, enum: ['on', 'off', 'auto'], description: 'on, off, or auto' },
     },
     run: (args) => setFan(args.state),
   }))
@@ -38,16 +38,16 @@ export function apply(ctx) {
     name: 'set_led',
     description: 'Turn the chapter 5 LED on or off over MQTT.',
     parameters: {
-      state: { type: 'string', required: true, description: 'on or off' },
+      state: { type: 'string', required: true, enum: ['on', 'off'], description: 'on or off' },
     },
     run: (args) => setLed(args.state),
   }))
   ctx.tools.register(textTool({
     name: 'set_threshold',
-    description: 'Set the high or low temperature threshold used by hysteresis. which is high or low.',
+    description: 'Set the high or low temperature threshold used by hysteresis. which is high or low. Rejects values that break the relation (high must be above low) and errors if the board did not apply the change.',
     parameters: {
-      which: { type: 'string', required: true, description: 'high or low' },
-      value: { type: 'string', required: true, description: 'Celsius, for example 30' },
+      which: { type: 'string', required: true, enum: ['high', 'low'], description: 'high or low' },
+      value: { type: 'string', required: true, description: 'Celsius with 0.1 resolution, for example 30' },
     },
     run: (args) => setThreshold(args.which, args.value),
   }))
